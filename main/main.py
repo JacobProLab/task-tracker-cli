@@ -1,53 +1,117 @@
 import argparse
-
-# parser = argparse.ArgumentParser(prog="main")
-# subparsers = parser.add_subparsers(dest="command")
-
-# # First-level subparser
-# subparser_a = subparsers.add_parser("level1")
-# subparser_a_subparsers = subparser_a.add_subparsers(dest="subcommand")
-
-# # Second-level subparser
-# subparser_b = subparser_a_subparsers.add_parser("level2")
-# subparser_b_subparsers = subparser_b.add_subparsers(dest="subsubcommand")
-
-# # Third-level subparser
-# subparser_c = subparser_b_subparsers.add_parser("level3")
-# subparser_c.add_argument("--option", help="An option for level3")
-
-# args = parser.parse_args()
-# print(args)
+import json
+import os
+from tabulate import tabulate
+from datetime import datetime
+from collections import defaultdict
+from pprint import pprint
 
 
 
+def create_json(filename):
+    with open(f'{filename}.json', 'w', encoding='utf-8') as file:
+        json.dump({}, file)
 
-parser = argparse.ArgumentParser(description='Manage tasks through a CLI')
-subparsers = parser.add_subparsers(dest='command')
+def read_json(filename):
+    with open(f'{filename}.json', 'r') as infile:
+        return json.load(infile)
+    
+def write_json(filename, dict):
+    with open(f'{filename}.json', 'w') as outfile:
+        json.dump(dict, outfile, ensure_ascii=False, indent=4)
 
-# task-cli add "Buy groceries"
-add_parser = subparsers.add_parser('add', help='Add new task description')
-add_parser.add_argument('description')
+def add_task(filename, description):
 
-# task-cli update 1 "Buy groceries and cook dinner"
-update_parser = subparsers.add_parser('update', help='update new task description')
-update_parser.add_argument('id')
-update_parser.add_argument('description')
+    json_dict = read_json(filename) # Read json file content
 
-# task-cli delete 1
-delete_parser = subparsers.add_parser('delete', help='delete specified task using its id')
-delete_parser.add_argument('id')
+    current_time = datetime.now().isoformat()
+    id = str(int(max("0", *json_dict.keys())) + 1)
+    json_dict[id] = {
+        'description': description,
+        'status': 'todo',
+        'createdAt': current_time,
+        'modifiedAt': current_time
+    }
 
-# task-cli mark-in-progress 1
-mark_parser = subparsers.add_parser('mark', help='change task status (todo, in-progress, done)')
-mark_parser.add_argument('id')
+    write_json(filename, json_dict) # Write dict to json file
 
-args = parser.parse_args()
+def update_task(filename, id, description):
 
-# verify which command on input
-if args.command == 'add':
-    print(args.description)
+    json_dict = read_json(filename) # Read json file content
+    json_dict[str(id)]['description'] = description
+    write_json(filename, json_dict) # Write dict to json file
 
-elif args.command == 'update':
-    print(args.id)
-    print(args.description)
+def delete_task(filename, id):
+    
+    json_dict = read_json(filename) # Read json file content
+    json_dict.pop(str(id))
+    write_json(filename, json_dict) # Write dict to json file
 
+
+def mark_status(filename, id):
+    pass
+
+def list_tasks(filename):
+
+    json_dict = read_json(filename) # Read json file content
+    table = format_as_table(json_dict)
+    
+    return table
+
+def format_as_table(payload):
+
+    table_dict = defaultdict(list)
+    for id, properties in payload.items():
+        table_dict['ID'].append(id)
+        table_dict['Description'].append(properties['description'])
+        table_dict['Status'].append(properties['status'])
+        table_dict['Created At'].append(properties['createdAt'])
+        table_dict['Modified At'].append(properties['modifiedAt'])
+
+    return tabulate(table_dict, headers="keys", tablefmt="fancy_grid")
+
+
+
+
+if __name__ == '__main__':
+
+    filename = 'data/database'
+    if not os.path.exists(f'{filename}.json'):
+        create_json(filename)
+
+    # Create parser and subparsers
+    parser = argparse.ArgumentParser(description='Manage tasks through a CLI')
+    subparsers = parser.add_subparsers(dest='command')
+
+    # add
+    add_parser = subparsers.add_parser('add', help='Add new task description')
+    add_parser.add_argument('description')
+    
+    # update
+    update_parser = subparsers.add_parser('update', help='Update given task id description')
+    update_parser.add_argument('id', type=int)
+    update_parser.add_argument('description')
+
+    # delete
+    delete_parser = subparsers.add_parser('delete', help='Update given task id description')
+    delete_parser.add_argument('id', type=int)
+
+    # list all
+    list_all_parser = subparsers.add_parser('list', help='Return a list of all tasks')
+
+    # Process query
+    args = parser.parse_args()
+
+    if args.command == 'add':
+        add_task(filename, args.description)
+
+    elif args.command == 'update':
+        update_task(filename, args.id, args.description)
+
+    elif args.command == 'delete':
+        delete_task(filename, args.id)
+
+    elif args.command == 'list':
+        print(list_tasks(filename))
+
+# python main/main.py add "Buy new monitor"
